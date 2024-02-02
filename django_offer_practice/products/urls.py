@@ -1,10 +1,13 @@
-from django.conf.urls import path, include
+from django.urls import path
 from . import views
+
 
 #/products/1/detail
 #/products/new
 
+
 urlpatterns = [
-    path('index/', views.index, name='index'),
-    path('another_example/', views.another_example_view),
+    path('', views.index),
+    path('new/', views.new),
+    path('about/', views.about)
 ]
