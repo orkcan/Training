@@ -1,5 +1,9 @@
 import pydot
 import graphviz
+from graphviz import Digraph
+from graphviz import dot
+
+
 
 dot_data = '''
 digraph Tree {
