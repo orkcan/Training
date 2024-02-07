@@ -103,7 +103,7 @@ class Jarvis:
         # Your existing code for the personal assistant app
 
         # Example use cases for the audio recorder
-        self.audio_recorder.record_audio(duration=10, filename="lecture.wav")
+        self.audio_recorder.record_audio(duration=5, filename="lecture.wav")
         self.audio_recorder.list_recordings()
         self.audio_recorder.play_recording("lecture.wav")
 
