@@ -129,6 +129,16 @@ class PersonalAssistant:
             if not user_input:
                 continue
 
+            if "search for" in user_input:  # check if the user command is a search query
+                search_query = user_input.replace("search for", "").strip()  # separate the actual query
+                results = self.bing_search(search_query)  # search using the query
+                with open("search_results.json", "w") as f:
+                    json.dump(results, f)
+                self.engine.say(f"Found {len(results)} results for your search!")
+                self.engine.runAndWait()
+                continue  # continue to next iteration to listen to next command
+
+            # if command not detected as search, continue with original intent traffic
             query_doc = self.spacy_model(user_input)
             max_similarity = -1
             max_intent = None
