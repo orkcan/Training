@@ -110,7 +110,7 @@ class PersonalAssistant:
         pass
     def bing_search(self, query):
         search_url = "https://api.bing.microsoft.com/v7.0/search"
-        subscription_key = "73019051-c171-42c4-bbb9-4fb8aaf03313"
+        subscription_key = "948b75c0956b46e5a3422ccc513e3c62"
 
         headers = {"Ocp-Apim-Subscription-Key" : subscription_key}
         params  = {"q": query, "textDecorations": True, "textFormat": "HTML"}
@@ -122,7 +122,7 @@ class PersonalAssistant:
         return search_results.get("webPages", {}).get("value", [])
     def start_listening(self):
         self.is_listening = True
-        self.engine.say("Starting listening mode")
+        self.engine.say("I am listening")
         self.engine.runAndWait()
         while self.is_listening:
             user_input = self.voice_input()
@@ -172,7 +172,6 @@ class PersonalAssistant:
                 self.engine.say("Model trained!")
                 self.engine.runAndWait()
 
-
             elif max_intent == "search":
                 query = self.voice_input()
                 results = self.bing_search(query)
@@ -180,10 +179,10 @@ class PersonalAssistant:
                 with open("search_results.json", "w") as f:
                     json.dump(results, f)
 
-                self.engine.say(f"Found {len(results)} results for your search!")
+                self.engine.say(f"Found {len(results)}  for your search!")
                 self.engine.runAndWait()
 
-            elif max_intent == "stop":
+            elif max_intent == "stop" or "shutdown the program":
                 self.is_listening = False
                 self.engine.say("Stopping listening mode")
                 self.engine.runAndWait()
