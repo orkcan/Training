@@ -9,6 +9,7 @@ import speech_recognition as sr
 import wikipedia
 from wolframalpha import Client
 import random
+import pyttsx3
 
 
 class Data(BaseModel):
@@ -20,6 +21,7 @@ class Data(BaseModel):
 
 class Jarvis:
     def __init__(self, data_filepath='data.parquet'):
+        self.engine = pyttsx3.init()  # Initialize Text-to-Speech engine
         self.data = Data(events=[], relationships=[], learning=[], daily_questions=[])
         self.bing_search_url = "https://api.bing.microsoft.com/v7.0/search"
         self.headers = {"Ocp-Apim-Subscription-Key": os.getenv('948b75c0956b46e5a3422ccc513e3c62')}
@@ -35,6 +37,18 @@ class Jarvis:
     #def check_api_keys(self):
     #    if not (self.headers["Ocp-Apim-Subscription-Key"] and self.weather_api_key and self.wolf_client):
     #        raise ValueError("Some API keys are missing. Check your environment variables.")
+    def text_to_speech(self, text):
+        """Converts the incoming text to speech"""
+        self.engine.say(text)
+        self.engine.runAndWait()
+
+    def set_speech_engine_properties(self):
+        voices = self.engine.getProperty('voices')
+        self.engine.setProperty('voice', voices[0].id)  # Changing index changes voices. Default voice is the first one.
+        rate = self.engine.getProperty('rate')  # Speed percent (can go over 100)
+        self.engine.setProperty('rate', 125)  # Speed percent (can go over 100)
+        volume = self.engine.getProperty('volume')  # Volume 0-1
+        self.engine.setProperty('volume', 1)  # Volume 0-1
 
     def create_parquet_file(self):
         df = DataFrame(self.data.dict())
@@ -45,8 +59,10 @@ class Jarvis:
         df.to_parquet(self.filepath, mode='overwrite')  # overwrite the existing content
 
     def voice_input(self):
+        # before listening, say something to the user
+        self.text_to_speech("I am listening master , please tell me your command")
         with sr.Microphone() as source:
-            print("Listening...")
+            print("Listening master")
             self.voice_recognizer.pause_threshold = 1
             audio = self.voice_recognizer.listen(source)
         try:
@@ -54,9 +70,12 @@ class Jarvis:
             query = self.voice_recognizer.recognize_google(audio, language='en-in')
             print(f"User said: {query}")
             return query
+
         except Exception as e:
             print(e)
-            print("Unable to recognize your voice.")
+            response = "I'm sorry, I was unable to recognize your voice."
+            print(response)
+            self.text_to_speech(response)
             return ""
 
     def add_event(self, event_text):
@@ -95,7 +114,7 @@ class Jarvis:
 
     def fetch_wikipedia_search_results(self, query, sentences=10):
         wikipedia_results = wikipedia.summary(query, sentences=sentences)
-        return wikipedia_results
+        self.text_to_speech(f"The result from Wikipedia is: {wikipedia_results}")
 
     def fetch_wolframalpha_answer(self, query):
         res = self.wolf_client.query(query)
