@@ -1,266 +1,83 @@
-import spacy
-from sklearn.svm import SVC
-from sklearn.pipeline import make_pipeline
+from tensorflow.keras.layers import Embedding, Conv1D, GlobalMaxPooling1D, Dense, Dropout, Flatten
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+import numpy as np
+import json
 import pyttsx3
+import random
+import speech_recognition as sr
 import datetime
 import requests
-import csv
-import speech_recognition as sr
-import json
-import random
-import wolframalpha
-from bs4 import BeautifulSoup
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import sent_tokenize, word_tokenize
+...
 
 class PersonalAssistant:
     def __init__(self):
-        self.nlp = spacy.load("en_core_web_sm")
-        self.data = {"events": [], "relationships": [], "learning": [], "daily_questions": []}
-        self.model = None
-        self.engine = pyttsx3.init()
-        self.is_listening = False
-        # define known intents
-        self.intents = {
-            "add_event": ["add event", "create event", "new event"],
-            "add_relationship": ["add relationship", "create relationship", "new relationship"],
-            "learn": ["learn", "learning"],
-            "daily_questions": ["ask daily questions", "daily questions"],
-            "train_model": ["train model", "model training"],
-            "search": ["search", "find", "lookup"],
-            "stop": ["stop listening", "stop"],
-            "ask_question": ["ask me a question", "can you ask me a question"]
+        ...
+        # Define the maximum number of words to keep based on frequency
+        self.max_num_words = 5000
+        # Define maximum length of sequence
+        self.max_len = 50
+        # Initialize tokenizer
+        self.tokenizer = Tokenizer(num_words=self.max_num_words)
+        # Define a function map
+        self.intent_map = {
+            "add_event": self.add_event,
+            "add_relationship": self.add_relationship,
+            "learn": self.add_learning_progress,
+            "daily_questions": self.ask_daily_question,
         }
-        # load spacy model
-        self.spacy_model = spacy.load("en_core_web_lg")
-    def save_to_file(self):
-        with open("data.json", "w") as f:
-            json.dump(self.data, f)
-
-    def voice_input(self):
-        r = sr.Recognizer()
-        with sr.Microphone() as source:
-            print("Listening...")
-            r.pause_threshold = 1
-            audio = r.listen(source)
-
-        try:
-            print("Recognizing...")
-            query = r.recognize_google(audio, language='en-in')
-            print(f"User said: {query}")
-            return query
-
-        except Exception as e:
-            print(e)
-            print("Unable to recognize your voice.")
-            return ""
-
-    def add_event(self, event_text):
-        date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.data["events"].append({"text": event_text, "date": date})
-
-    def add_relationship(self, relationship_text):
-        self.data["relationships"].append({"text": relationship_text})
-
-    def add_learning_progress(self, subject, progress_text):
-        self.data["learning"].append({"subject": subject, "text": progress_text})
-
-    def add_daily_question_answer(self, question, answer):
-        date = datetime.datetime.now().strftime("%Y-%m-%d")
-        self.data["daily_questions"].append({"question": question, "answer": answer, "date": date})
-
-    def ask_daily_question(self):
-        questions = [
-            "How did your day go?",
-            "What did you learn today?",
-            "Any memorable events today?",
-            "How would you rate your mood today? (On a scale of 1 to 10)",
-            "Did you exercise today? If yes, what type of exercise did you do?",
-            "What was the most challenging aspect of your day?",
-            "Did you have any meaningful conversations today?",
-            "How many hours of sleep did you get last night?",
-            "What's one thing you would like to improve about your day?",
-            "What are your top priorities for tomorrow?"
-        ]
-        # Select a random question
-        question = random.choice(questions)
-        return question
-        '''''
-        for question in questions:
-            answer = self.voice_input()
-            self.add_daily_question_answer(question, answer) **'''
-    def train_model(self):
-        text_classifier = self.nlp.pipe(
-            (" ".join(event["text"] for event in self.data["events"])),
-            disable=["tagger", "parser", "ner"]
+        # Define a string to intent function mapping here as a dictionary
+        self.string_to_intent = dict(
+            [(i, intent) for i, intent in enumerate(self.intent_map.keys())]
         )
-        self.model = make_pipeline(text_classifier, SVC(kernel="linear"))
+        ...
 
-        labels = [self.label_event(event) for event in self.data["events"]]
+    def train_model(self):
+        # Define a CNN model with multiple layers, and dropout for regularization
+        model = Sequential([
+            Embedding(self.max_num_words, 64, input_length=self.max_len),
+            Conv1D(128, 5, activation='relu'),
+            Conv1D(128, 5, activation='relu'),
+            GlobalMaxPooling1D(),
+            Dense(64, activation='relu'),
+            Dropout(0.5),  # Add dropout layers to avoid overfitting
+            Dense(64, activation='relu'),
+            Dropout(0.5),
+            Flatten(),  # Flatten the tensor output before feeding it into Dense layer
+            Dense(len(self.intent_map.keys()), activation='softmax')
+        ])
+        model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
-        self.model.fit(self.data["events"], labels)
+        # Fit the model with the training examples (convert text into sequences for model consumption)
+        examples = [ex for intent, exs in self.intents.items() for ex in exs]
+        labels = [self.string_to_intent[intent] for intent, exs in self.intents.items() for ex in
+                  exs]  # match class indices
+        sequences = self.tokenizer.texts_to_sequences(examples)
+        padded_sequences = pad_sequences(sequences, maxlen=self.max_len)
+        model.fit(padded_sequences, np.array(labels), epochs=5)
 
-    def label_event(self, event):
-        if "work" in event["text"].lower():
-            return "Work"
-        elif "learn" in event["text"].lower():
-            return "Learning"
-        else:
-            return "Personal"
+        self.intent_classifier = model
 
-    def search_and_save_data(self, query):
+    ...
 
-    # Code to search the internet for data related to the query and save it as CSV
-        pass
-    def bing_search(self, query):
-        search_url = "https://api.bing.microsoft.com/v7.0/search"
-        subscription_key = "948b75c0956b46e5a3422ccc513e3c62"
-
-        headers = {"Ocp-Apim-Subscription-Key" : subscription_key}
-        params  = {"q": query, "textDecorations": True, "textFormat": "HTML"}
-
-        response = requests.get(search_url, headers=headers, params=params)
-        response.raise_for_status()
-        search_results = response.json()
-
-        return search_results.get("webPages", {}).get("value", [])
-    def search_and_read_summary(self, query):
-        nltk.download('punkt')
-        nltk.download('stopwords')
-
-        # Perform the search
-        results = self.bing_search(query)
-
-        # If there are results, pick the first result
-        if results:
-            url = results[0]['url']
-            page_response = requests.get(url)
-            soup = BeautifulSoup(page_response.text, 'html.parser')
-
-            # Remove script tags and css styles
-            for script in soup(["script", "style"]):
-                script.decompose()
-
-            # Get text and split into sentences
-            sentences = sent_tokenize(soup.get_text())
-            stop_words = set(stopwords.words('english'))
-
-            # Keep sentences if they are not stop words and length is greater than 10
-            summary_sentences = [sentence for sentence in sentences if len(
-                [word for word in word_tokenize(sentence) if word not in stop_words]) > 10]
-
-            # Keep top 5 sentences
-            summary_sentences = summary_sentences[:5]
-
-            # Join the selected sentences back into a single string
-            summary = ' '.join(summary_sentences)
-
-            return summary
-        else:
-            return "No results found."
     def start_listening(self):
-        self.is_listening = True
-        self.engine.say("I am listening")
-        self.engine.runAndWait()
+        ...
         while self.is_listening:
             user_input = self.voice_input()
             if not user_input:
                 continue
 
-                # Check for search commands first
-            search_phrases = ["search for",
-                                  "find out",
-                                  "look up",
-                                  "i want to know about",
-                                  "can you tell me about",
-                                  "who is", "what is"]
-            for phrase in search_phrases:
-                if phrase in user_input.lower():
-                        search_query = user_input.replace(phrase, "").strip()  # separate the actual query
-                        results = self.bing_search(search_query)  # search using the query
-                        self.engine.say(f"Found {len(results)} results for your search!")
-                        self.engine.runAndWait()
-                        break  # terminate the for-loop once search has been handled
+            # Tokenize and pad the user input
+            processed_input = self.tokenizer.texts_to_sequences([user_input])
+            padded_input = pad_sequences(processed_input, maxlen=self.max_len)
 
+            # Predict the intent
+            intent_prediction = np.argmax(self.intent_classifier.predict(padded_input))
 
-            # Perform intent recognition as usual continue to next iteration to listen to next command
-            # if command not detected as search, continue with original intent traffic
-            query_doc = self.spacy_model(user_input)
-            max_similarity = -1
-            max_intent = None
+            # Perform action associated with predicted intent
+            action = self.intent_map[self.string_to_intent[intent_prediction]]
+            action(user_input)  # execute the function mapped to the predicted intent
 
-            for intent, examples in self.intents.items():
-                for example in examples:
-                    example_doc = self.spacy_model(example)
-                    similarity = query_doc.similarity(example_doc)
-
-                    if similarity > max_similarity:
-                        max_similarity = similarity
-                        max_intent = intent
-
-            if max_intent == "add_event":
-                self.add_event(user_input)
-                self.save_to_file()
-                self.engine.say("Event added successfully!")
-                self.engine.runAndWait()
-
-            elif max_intent == "add_relationship":
-                self.add_relationship(user_input)
-                self.save_to_file()
-                self.engine.say("Relationship added!")
-                self.engine.runAndWait()
-
-            elif max_intent == "learn":
-                subject = self.voice_input()
-                self.add_learning_progress(subject, user_input)
-                self.save_to_file()
-                self.engine.say("Learning progress added!")
-                self.engine.runAndWait()
-
-            elif max_intent == "daily_questions":
-                self.ask_daily_questions()
-                self.save_to_file()
-                self.engine.say("Daily questions answered and recorded!")
-                self.engine.runAndWait()
-
-            elif max_intent == "train_model":
-                self.train_model()
-                self.engine.say("Model trained!")
-                self.engine.runAndWait()
-
-            elif max_intent == "search":
-                query = self.voice_input()
-                results = self.bing_search(query)
-                # Saving search results to a file - adjust saving method according to your needs
-                with open("search_results.json", "w") as f:
-                    json.dump(results, f)
-
-                self.engine.say(f"Found {len(results)}  for your search!")
-                self.engine.runAndWait()
-
-            #elif max_intent == "stop" or "shutdown the program":
-            #    self.is_listening = False
-            #    self.engine.say("Stopping listening mode")
-            #    self.engine.runAndWait()
-
-            elif max_intent == "ask_question":
-                # Assuming `ask_daily_question` function returns a single question
-                question = self.ask_daily_question()
-                self.engine.say(question)
-                self.engine.runAndWait()
-
-                answer = self.voice_input()
-                self.add_daily_question_answer(question, answer)
-                self.engine.say("Your answer has been recorded!")
-                self.engine.runAndWait()
-
-            else:
-                print("Sorry, I didn't understand that. Please provide a valid command.")
-
-
-if __name__ == "__main__":
-    assistant = PersonalAssistant()
-    assistant.start_listening()
-
-
+        ...
