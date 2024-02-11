@@ -18,6 +18,12 @@ class Data(BaseModel):
     learning: list
     daily_questions: list
 
+class States:
+    LISTENING = "LISTENING"
+    ADD_EVENT = "ADD_EVENT"
+    ADD_RELATIONSHIP = "ADD_RELATIONSHIP"
+    ADD_LEARNING = "ADD_LEARNING"
+    ASK_QUESTION = "ASK_QUESTION"
 
 class Jarvis:
     def __init__(self, data_filepath='data.parquet'):
@@ -26,13 +32,14 @@ class Jarvis:
         self.bing_search_url = "https://api.bing.microsoft.com/v7.0/search"
         self.headers = {"Ocp-Apim-Subscription-Key": os.getenv('948b75c0956b46e5a3422ccc513e3c62')}
         self.voice_recognizer = sr.Recognizer()  # Initialize speech recognition
-        self.is_listening = False  # Control whether the assistant is actively listening
+        self.is_listening = True  # Control whether the assistant is actively listening
         self.filepath = data_filepath  # Save content to Parquet file
         self.weather_api_key = os.getenv('OPEN_WEATHER_API_KEY')  # Initialize OpenWeather client
         self.sent_transformer = SentenceTransformer('all-MiniLM-L6-v2')
         self.wolf_client = Client(os.environ.get('WOLFRAM_ALPHA_APP_ID'))  # Initialize Wolfram Alpha client
         self.create_parquet_file()  # Create Parquet file on init
         #self.check_api_keys()
+        self.engine = pyttsx3.init()  # Initialize Text-to-Speech engine
 
     #def check_api_keys(self):
     #    if not (self.headers["Ocp-Apim-Subscription-Key"] and self.weather_api_key and self.wolf_client):
@@ -42,6 +49,17 @@ class Jarvis:
         self.engine.say(text)
         self.engine.runAndWait()
 
+    def change_state(self, command):
+        if "add event" in command:
+            return States.ADD_EVENT
+        elif "add relationship" in command:
+            return States.ADD_RELATIONSHIP
+        elif "add learning" in command:
+            return States.ADD_LEARNING
+        elif "ask question" in command:
+            return States.ASK_QUESTION
+
+        return States.LISTENING
     def set_speech_engine_properties(self):
         voices = self.engine.getProperty('voices')
         self.engine.setProperty('voice', voices[0].id)  # Changing index changes voices. Default voice is the first one.
@@ -140,7 +158,52 @@ class Jarvis:
         # It's better to store the answer and ask the assistant to speak out the question
         # but for simplicity, let's return the question text for now
         return question
+    def main_loop(self):
+        self.state = States.LISTENING
+        while True:
+            try:
+                if self.state == States.LISTENING:
+                    command = self.voice_input().lower()
+                    # voice input may return empty string
+                    if command:
+                        self.state = self.change_state(command)
+                elif self.state == States.ADD_EVENT:
+                    self.text_to_speech('What is the event details, master?')
+                    command = self.voice_input().lower()
+                    self.add_event(command)
+                    self.text_to_speech('Event added successfully.')
+                    self.state = States.LISTENING
+                elif self.state == States.ADD_RELATIONSHIP:
+                    self.text_to_speech('Can you tell me more about the relationship, master?')
+                    command = self.voice_input().lower()
+                    self.add_relationship(command)
+                    self.text_to_speech('Relationship information was noted, master.')
+                    self.state = States.LISTENING
+                elif self.state == States.ADD_LEARNING:
+                    self.text_to_speech('Can you tell me more about the learning progress, master?')
+                    command = self.voice_input().lower()
+                    self.add_learning_progress("auto-gen-prog", command)
+                    self.text_to_speech('Noted your progress, master.')
+                    self.state = States.LISTENING
+                elif self.state == States.ASK_QUESTION:
+                    self.text_to_speech('What is your question today, master?')
+                    question = self.voice_input().lower()
+                    self.text_to_speech('And your answer, master?')
+                    answer = self.voice_input().lower()
+                    self.add_daily_question_answer(question, answer)
+                    self.text_to_speech('I have updated your daily question and answer, master.')
+                    self.state = States.LISTENING
+                elif 'exit' in command:  # say 'exit' to stop the program
+                    self.text_to_speech('Goodbye, master.')
+                    break
+                else:
+                    self.text_to_speech("Sorry, I didn't understand. Can you repeat please?")
+                    self.state = States.LISTENING  # revert back to listening state
 
+            except Exception as e:
+                print(f"An error occured :{str(e)}")
+                self.text_to_speech("An exception error occured. Resetting by putting the state in Listening")
+                self.state = States.LISTENING
     def fetch_weather_information(self, city):
         try:
             response = requests.get('http://api.openweathermap.org/data/2.5/weather',
@@ -155,3 +218,7 @@ class Jarvis:
             self.update_parquet_file()  # Update Parquet file
         except requests.exceptions.RequestException as err:
             print(f"A request error occurred: {err}")
+
+if __name__ == '__main__':
+    jarvis = Jarvis()
+    jarvis.main_loop()
