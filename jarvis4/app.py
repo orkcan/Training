@@ -24,6 +24,8 @@ class States:
     ADD_RELATIONSHIP = "ADD_RELATIONSHIP"
     ADD_LEARNING = "ADD_LEARNING"
     ASK_QUESTION = "ASK_QUESTION"
+    BING_SEARCH = "BING_SEARCH"
+    WIKIPEDIA_SEARCH = "WIKIPEDIA_SEARCH"
 
 class Jarvis:
     def __init__(self, data_filepath='data.parquet'):
@@ -46,11 +48,19 @@ class Jarvis:
     #        raise ValueError("Some API keys are missing. Check your environment variables.")
     def text_to_speech(self, text):
         """Converts the incoming text to speech"""
+        print(text)  # print the text to the console
         self.engine.say(text)
         self.engine.runAndWait()
 
     def change_state(self, command):
-        if "add event" in command:
+        if "bing search" in command:
+            return States.BING_SEARCH
+        elif "wikipedia search for" in command:
+            command_split = command.split('')
+            if len(command_split) > 3:
+                search_query = ' '.join(command_split[3:])
+                return States.WIKIPEDIA_SEARCH
+        elif "add event" in command:
             return States.ADD_EVENT
         elif "add relationship" in command:
             return States.ADD_RELATIONSHIP
@@ -131,9 +141,19 @@ class Jarvis:
             print(f"A request error occurred: {err}")
 
     def fetch_wikipedia_search_results(self, query, sentences=10):
-        wikipedia_results = wikipedia.summary(query, sentences=sentences)
-        self.text_to_speech(f"The result from Wikipedia is: {wikipedia_results}")
-
+        print(f"Searching Wikipedia for '{query}'")  # Add debug print here
+        try:
+            wikipedia_search = wikipedia.summary(query, sentences=sentences)
+            self.text_to_speech("Search findings from Wikipedia:")
+            self.text_to_speech(wikipedia_search)
+        except wikipedia.exceptions.DisambiguationError as e:
+            self.text_to_speech(
+                f"There are multiple entries matching that wikipedia search, including: {', '.join(e.options)}")
+        except wikipedia.exceptions.PageError:
+            self.text_to_speech("Sorry, I couldn't find a page with that title on Wikipedia.")
+        except Exception as e:
+            self.text_to_speech(f"An error occurred while searching Wikipedia: {str(e)}")
+        print(f"Wikipedia search for '{query}' completed")  # Add debug print here
     def fetch_wolframalpha_answer(self, query):
         res = self.wolf_client.query(query)
         wolfram_alpha_answers = next(res.results).text
@@ -185,6 +205,20 @@ class Jarvis:
                     self.add_learning_progress("auto-gen-prog", command)
                     self.text_to_speech('Noted your progress, master.')
                     self.state = States.LISTENING
+                elif self.state == States.BING_SEARCH:
+                    self.text_to_speech('What would you like to search on Bing, master?')
+                    query = self.voice_input().lower()
+                    self.fetch_bing_search_results(query)
+                    self.text_to_speech('Search on Bing has been completed, master.')
+                    self.state = States.LISTENING
+                elif self.state == States.WIKIPEDIA_SEARCH:
+                    if search_query is None:
+                        self.text_to_speech('Please provide a keyword to search on Wikipedia, master.')
+                        search_query = self.voice_input().lower()
+                    self.fetch_wikipedia_search_results(search_query)
+                    self.text_to_speech('Completed the Wikipedia search, master.')
+                    self.state = States.LISTENING
+                    search_query = None
                 elif self.state == States.ASK_QUESTION:
                     self.text_to_speech('What is your question today, master?')
                     question = self.voice_input().lower()
